@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "csession"
+version = "1.0.0"
+description = "Claude Code Session Manager — save and restore AI coding session context"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.8"
+authors = [
+    { name = "Your Name", email = "you@example.com" }
+]
+keywords = ["claude", "ai", "session", "context", "developer-tools", "cli"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Utilities",
+]
+
+# No required dependencies — stdlib only
+dependencies = []
+
+[project.optional-dependencies]
+clipboard = ["pyperclip>=1.8"]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
+
+[project.scripts]
+csession = "csession:main"
+
+[project.urls]
+Homepage   = "https://github.com/yourusername/csession"
+Repository = "https://github.com/yourusername/csession"
+Issues     = "https://github.com/yourusername/csession/issues"
+Changelog  = "https://github.com/yourusername/csession/blob/main/CHANGELOG.md"
+
+[tool.setuptools]
+py-modules = ["csession"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts   = "-v --tb=short"
