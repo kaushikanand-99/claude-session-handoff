@@ -30,6 +30,27 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+
+def _force_utf8_output():
+    """
+    Make stdout/stderr safe for box-drawing characters and emoji.
+
+    Analogy: like fitting a UNIVERSAL PLUG ADAPTER before you travel —
+    the wall socket (Windows cp1252 console) can't take our plug (UTF-8),
+    so we adapt once at the door instead of failing at every appliance.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:          # Python < 3.7, or a non-text stream
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass                          # Redirected/closed stream — leave it alone
+
+
+_force_utf8_output()
+
 # ─────────────────────────────────────────────
 #  Paths
 # ─────────────────────────────────────────────
@@ -46,10 +67,21 @@ HISTORY_DIR  = WORKSPACE / "history"
 # ─────────────────────────────────────────────
 #  Helpers
 # ─────────────────────────────────────────────
-def run(cmd: str, fallback: str = "") -> str:
-    """Run a shell command, return stdout or fallback on error."""
+def run(cmd, fallback: str = "") -> str:
+    """
+    Run a command given as an ARGUMENT LIST and return stdout, or fallback.
+
+    Deliberately no shell: shell=True routes through cmd.exe on Windows, where
+    POSIX-isms like `2>/dev/null` and 'single quotes' are not understood and
+    silently blank out the result. capture_output already swallows stderr, so
+    no redirection is needed on any platform.
+    """
+    if isinstance(cmd, str):
+        cmd = cmd.split()
     try:
-        r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if r.returncode != 0:
+            return fallback
         return r.stdout.strip() or fallback
     except Exception:
         return fallback
@@ -82,7 +114,7 @@ def get_git_info() -> dict:
     Analogy: like checking your car's dashboard before a trip —
     current speed (branch), odometer (commits), warning lights (changes).
     """
-    in_git = run("git rev-parse --is-inside-work-tree 2>/dev/null") == "true"
+    in_git = run(["git", "rev-parse", "--is-inside-work-tree"]) == "true"
     if not in_git:
         return {
             "branch": "N/A (not a git repo)",
@@ -91,20 +123,60 @@ def get_git_info() -> dict:
             "changed_files": "  (not tracked)"
         }
     return {
-        "branch":         run("git branch --show-current", "detached"),
-        "last_commit":    run("git log -1 --format='%h  %s  (%ar)' 2>/dev/null", "no commits yet"),
-        "recent_commits": run("git log -5 --format='  - %h %s' 2>/dev/null", "  none"),
-        "changed_files":  run("git diff --stat HEAD 2>/dev/null") or run("git status --short 2>/dev/null", "  no changes"),
+        "branch":         run(["git", "branch", "--show-current"], "detached"),
+        "last_commit":    run(["git", "log", "-1", "--format=%h  %s  (%ar)"], "no commits yet"),
+        "recent_commits": run(["git", "log", "-5", "--format=  - %h %s"], "  none"),
+        "changed_files":  run(["git", "diff", "--stat", "HEAD"])
+                          or run(["git", "status", "--short"], "  no changes"),
     }
+
+
+STATUS_EMOJI = {"todo": "⬜", "wip": "🔄", "done": "✅", "blocked": "❌", "skip": "⏭️"}
+
+
+def iter_task_rows(progress_text: str):
+    """
+    Yield (line_index, task_id, status_cell) for real task rows only.
+
+    Analogy: like a TICKET INSPECTOR who only checks people holding tickets —
+    the status legend and the HTML comments mention every emoji, but they are
+    documentation, not passengers. Counting them inflates every statistic.
+
+    A real row looks like:  | T04 | ⬜ | Some task | Notes |
+    """
+    in_comment = False
+    for i, line in enumerate(progress_text.split("\n")):
+        # Skip HTML comment blocks (the status legend lives inside one)
+        if "<!--" in line:
+            in_comment = "-->" not in line
+            continue
+        if in_comment:
+            in_comment = "-->" not in line
+            continue
+
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            continue
+
+        cells = [c.strip() for c in stripped.strip("|").split("|")]
+        if len(cells) < 2:
+            continue
+        # Header row and the |---|---| separator are not tasks
+        if not re.fullmatch(r"T\d+", cells[0], flags=re.IGNORECASE):
+            continue
+
+        yield i, cells[0].upper(), cells[1]
 
 
 def count_tasks(progress_text: str) -> dict:
-    return {
-        "done":    progress_text.count("✅"),
-        "wip":     progress_text.count("🔄"),
-        "todo":    progress_text.count("⬜"),
-        "blocked": progress_text.count("❌"),
-    }
+    """Count tasks by status, reading only the status column of real rows."""
+    counts = {"done": 0, "wip": 0, "todo": 0, "blocked": 0}
+    for _, _, status in iter_task_rows(progress_text):
+        for key in counts:
+            if STATUS_EMOJI[key] in status:
+                counts[key] += 1
+                break
+    return counts
 
 
 # ─────────────────────────────────────────────
@@ -427,14 +499,20 @@ def cmd_status(args):
     total   = sum(tasks.values())
     pct     = int((tasks["done"] / total * 100) if total > 0 else 0)
 
+    # `init` writes last_saved as null, and dict.get()'s default only fires on a
+    # MISSING key — never on a present-but-None one. `or` covers both.
+    project    = config.get("project") or "unknown"
+    sessions   = config.get("session_count") or 0
+    last_saved = config.get("last_saved") or "never"
+
     bar_len = 30
     filled  = int(bar_len * pct / 100)
     bar     = "█" * filled + "░" * (bar_len - filled)
 
     print(f"\n┌─────────────────────────────────────────────────┐")
-    print(f"│  📦  {config.get('project', 'unknown'):<43}│")
-    print(f"│  🔢  Sessions logged: {config.get('session_count', 0):<26}│")
-    print(f"│  🕐  Last saved:      {config.get('last_saved', 'never'):<26}│")
+    print(f"│  📦  {project:<43}│")
+    print(f"│  🔢  Sessions logged: {sessions:<26}│")
+    print(f"│  🕐  Last saved:      {last_saved:<26}│")
     print(f"├─────────────────────────────────────────────────┤")
     print(f"│  Progress  [{bar}] {pct:>3}%  │")
     print(f"│                                                 │")
@@ -471,18 +549,27 @@ def cmd_task(args):
             print("❌  Provide task description. Example: csession task add 'Write unit tests'")
             return
         task_text = " ".join(text)
-        ids       = re.findall(r'T(\d+)', progress)
-        next_num  = int(max(ids, key=int)) + 1 if ids else 1
+        lines     = progress.split("\n")
+
+        # Derive the next ID from real rows only — scanning the whole file would
+        # also pick up IDs mentioned in prose ("1. Start with T01") or in notes.
+        rows      = list(iter_task_rows(progress))
+        next_num  = max((int(tid[1:]) for _, tid, _ in rows), default=0) + 1
         next_id   = f"T{next_num:02d}"
-        new_row   = f"| {next_id} | ⬜     | {task_text:<35} |                        |\n"
+        new_row   = f"| {next_id} | ⬜     | {task_text:<35} |                        |"
 
-        # Insert before blockers section, or append to table
-        if "## Blockers" in progress:
-            progress = progress.replace("## Blockers", new_row + "\n## Blockers", 1)
+        # Insert immediately after the last table row. Anchoring on "## Blockers"
+        # instead lands the row after the template's blank line, and a blank line
+        # terminates a markdown table — splitting it into two.
+        if rows:
+            insert_at = rows[-1][0] + 1
+        elif "## Blockers" in progress:
+            insert_at = lines.index("## Blockers")
         else:
-            progress += "\n" + new_row
+            insert_at = len(lines)
 
-        write_file(PROGRESS_FILE, progress)
+        lines.insert(insert_at, new_row)
+        write_file(PROGRESS_FILE, "\n".join(lines))
         print(f"✅  Added {next_id}: {task_text}")
         return
 
@@ -502,23 +589,26 @@ def cmd_task(args):
     task_id    = text[0].upper()
     new_status = status_map[action]
     lines      = progress.split("\n")
-    found      = False
 
-    for i, line in enumerate(lines):
-        if task_id in line:
-            for s in all_statuses:
-                if s in line:
-                    lines[i] = line.replace(s, new_status, 1)
-                    found = True
-                    break
-            if found:
-                break
+    # Match the ID *cell* exactly. A substring test against the whole line would
+    # claim any row whose task text happens to mention another task's ID.
+    target = next((i for i, tid, _ in iter_task_rows(progress) if tid == task_id), None)
 
-    if found:
-        write_file(PROGRESS_FILE, "\n".join(lines))
-        print(f"✅  {task_id} marked as {action} ({new_status})")
-    else:
+    if target is None:
         print(f"❌  Task ID '{task_id}' not found in PROGRESS.md")
+        return
+
+    line = lines[target]
+    for s in all_statuses:
+        if s in line:
+            lines[target] = line.replace(s, new_status, 1)
+            break
+    else:
+        print(f"❌  {task_id} has no status cell to update.")
+        return
+
+    write_file(PROGRESS_FILE, "\n".join(lines))
+    print(f"✅  {task_id} marked as {action} ({new_status})")
 
 
 def cmd_log(args):

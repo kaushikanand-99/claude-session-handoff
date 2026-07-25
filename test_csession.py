@@ -5,6 +5,7 @@ Run with:  pytest tests/ -v
 """
 import json
 import os
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -76,7 +77,7 @@ class TestInit:
             name = "payment-service"
             force = False
         csession.cmd_init(Args())
-        config = json.loads((tmp_project / ".claude-session" / "config.json").read_text())
+        config = json.loads((tmp_project / ".claude-session" / "config.json").read_text(encoding="utf-8"))
         assert config["project"] == "payment-service"
         assert config["session_count"] == 0
 
@@ -93,7 +94,7 @@ class TestInit:
             name = "new-name"
             force = True
         csession.cmd_init(Args())
-        config = json.loads((initialized_project / ".claude-session" / "config.json").read_text())
+        config = json.loads((initialized_project / ".claude-session" / "config.json").read_text(encoding="utf-8"))
         assert config["project"] == "new-name"
 
 
@@ -119,7 +120,7 @@ class TestSave:
             message = "first"
         csession.cmd_save(Args())
         csession.cmd_save(Args())
-        config = json.loads((initialized_project / ".claude-session" / "config.json").read_text())
+        config = json.loads((initialized_project / ".claude-session" / "config.json").read_text(encoding="utf-8"))
         assert config["session_count"] == 2
 
     def test_archives_to_history(self, initialized_project):
@@ -133,14 +134,14 @@ class TestSave:
         class Args:
             message = "JWT refresh tokens are broken"
         csession.cmd_save(Args())
-        snapshot = (initialized_project / ".claude-session" / "SNAPSHOT.md").read_text()
+        snapshot = (initialized_project / ".claude-session" / "SNAPSHOT.md").read_text(encoding="utf-8")
         assert "JWT refresh tokens are broken" in snapshot
 
     def test_resume_prompt_contains_instructions(self, initialized_project):
         class Args:
             message = "test"
         csession.cmd_save(Args())
-        resume = (initialized_project / ".claude-session" / "RESUME_PROMPT.md").read_text()
+        resume = (initialized_project / ".claude-session" / "RESUME_PROMPT.md").read_text(encoding="utf-8")
         assert "Instructions for Claude" in resume
         assert "Session Resume" in resume
 
@@ -155,7 +156,7 @@ class TestTask:
             action = "add"
             text = ["Implement", "auth", "module"]
         csession.cmd_task(Args())
-        progress = (initialized_project / ".claude-session" / "PROGRESS.md").read_text()
+        progress = (initialized_project / ".claude-session" / "PROGRESS.md").read_text(encoding="utf-8")
         assert "Implement auth module" in progress
         assert "⬜" in progress
 
@@ -168,7 +169,7 @@ class TestTask:
             action = "add"
             text = ["Second task"]
         csession.cmd_task(Args2())
-        progress = (initialized_project / ".claude-session" / "PROGRESS.md").read_text()
+        progress = (initialized_project / ".claude-session" / "PROGRESS.md").read_text(encoding="utf-8")
         assert "T04" in progress  # T01–T03 exist in template
         assert "T05" in progress
 
@@ -183,7 +184,7 @@ class TestTask:
             text = ["T04"]
         csession.cmd_task(DoneArgs())
 
-        progress = (initialized_project / ".claude-session" / "PROGRESS.md").read_text()
+        progress = (initialized_project / ".claude-session" / "PROGRESS.md").read_text(encoding="utf-8")
         lines = [l for l in progress.split("\n") if "T04" in l]
         assert any("✅" in l for l in lines)
 
@@ -198,7 +199,7 @@ class TestTask:
             text = ["T04"]
         csession.cmd_task(WipArgs())
 
-        progress = (initialized_project / ".claude-session" / "PROGRESS.md").read_text()
+        progress = (initialized_project / ".claude-session" / "PROGRESS.md").read_text(encoding="utf-8")
         lines = [l for l in progress.split("\n") if "T04" in l]
         assert any("🔄" in l for l in lines)
 
@@ -220,7 +221,7 @@ class TestLog:
         class Args:
             text = ["Chose", "JWT", "over", "sessions"]
         csession.cmd_log(Args())
-        decisions = (initialized_project / ".claude-session" / "DECISIONS.md").read_text()
+        decisions = (initialized_project / ".claude-session" / "DECISIONS.md").read_text(encoding="utf-8")
         assert "Chose JWT over sessions" in decisions
 
     def test_multiple_logs_accumulate(self, initialized_project):
@@ -230,9 +231,107 @@ class TestLog:
             text = ["Second decision"]
         csession.cmd_log(Args1())
         csession.cmd_log(Args2())
-        decisions = (initialized_project / ".claude-session" / "DECISIONS.md").read_text()
+        decisions = (initialized_project / ".claude-session" / "DECISIONS.md").read_text(encoding="utf-8")
         assert "First decision" in decisions
         assert "Second decision" in decisions
+
+
+# ─────────────────────────────────────────────
+#  Test: helpers
+# ─────────────────────────────────────────────
+
+class TestRegressions:
+    """One test per defect in enhancement.md. Each fails on csession 1.0.0."""
+
+    def test_status_before_first_save(self, initialized_project, capsys):
+        """D1 — init writes last_saved=None; dict.get's default never fires."""
+        csession.cmd_status(object())
+        out = capsys.readouterr().out
+        assert "never" in out
+        assert "Last saved" in out
+
+    def test_get_git_info_uses_argument_list_commands(self):
+        """D2 — shell=True + POSIX redirects blank out git context on Windows."""
+        captured = {}
+
+        def fake_run(cmd, *a, **kw):
+            captured["cmd"] = cmd
+            captured["shell"] = kw.get("shell", False)
+
+            class R:
+                returncode = 0
+                stdout = "true"
+            return R()
+
+        with patch("csession.subprocess.run", side_effect=fake_run):
+            csession.run(["git", "rev-parse", "--is-inside-work-tree"])
+
+        assert isinstance(captured["cmd"], list), "commands must be argument lists"
+        assert captured["shell"] is False, "shell=True breaks on cmd.exe"
+        assert not any("/dev/null" in part for part in captured["cmd"])
+
+    def test_count_tasks_ignores_legend_and_comments(self, initialized_project):
+        """D5 — the legend inside the HTML comment inflated every status by one."""
+        progress = (initialized_project / ".claude-session" / "PROGRESS.md").read_text(encoding="utf-8")
+        counts = csession.count_tasks(progress)
+        assert counts == {"done": 0, "wip": 0, "todo": 3, "blocked": 0}
+
+    def test_mark_task_id_matches_exact_table_cell(self, initialized_project):
+        """D3 — substring matching claimed any row whose text mentioned the ID."""
+        class Add:
+            action = "add"
+            text = ["Prep work for T09"]      # becomes T04; text mentions T09
+        csession.cmd_task(Add())
+        for n in range(5, 10):                # T05..T09
+            class Filler:
+                action = "add"
+                text = [f"filler {n}"]
+            csession.cmd_task(Filler())
+
+        class Done:
+            action = "done"
+            text = ["T09"]
+        csession.cmd_task(Done())
+
+        progress = (initialized_project / ".claude-session" / "PROGRESS.md").read_text(encoding="utf-8")
+        rows = {tid: status for _, tid, status in csession.iter_task_rows(progress)}
+        assert "✅" in rows["T09"], "the requested task must be marked"
+        assert "⬜" in rows["T04"], "a task merely mentioning T09 must be untouched"
+
+    def test_add_task_preserves_task_table(self, initialized_project):
+        """D4 — a blank line before the new row split the markdown table in two."""
+        class Add:
+            action = "add"
+            text = ["New task alpha"]
+        csession.cmd_task(Add())
+
+        progress = (initialized_project / ".claude-session" / "PROGRESS.md").read_text(encoding="utf-8")
+        table = progress[progress.index("| ID"):progress.index("## Blockers")].rstrip()
+        assert "" not in [l.strip() for l in table.split("\n")], \
+            "a blank line inside the table terminates it in markdown"
+
+    def test_unicode_output_does_not_crash(self, initialized_project):
+        """
+        D6 — box-drawing characters raised UnicodeEncodeError on cp1252.
+
+        Must run as a subprocess with a legacy encoding forced: capsys replaces
+        stdout with a UTF-8 capture object, so an in-process call can never
+        reproduce the console-encoding failure this defect is about.
+        """
+        env = dict(os.environ, PYTHONIOENCODING="cp1252")
+        result = subprocess.run(
+            [sys.executable, str(Path(csession.__file__)), "status"],
+            cwd=str(initialized_project),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",      # decode the child's UTF-8 in the parent;
+            errors="replace",      # without this the parent falls back to cp1252
+            env=env,
+        )
+        assert result.returncode == 0, (
+            f"status crashed under cp1252:\n{result.stderr}"
+        )
+        assert "UnicodeEncodeError" not in result.stderr
 
 
 # ─────────────────────────────────────────────
