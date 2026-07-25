@@ -18,6 +18,11 @@ data · **S3** wrong output, recoverable · **S4** packaging/hygiene.
 | D7 | S4 | Invalid build backend — `pip install .` fails | `pyproject.toml:3` |
 | D8 | S4 | Repo layout flattened; `testpaths` mismatch | repo root |
 | D9 | S2 | Test suite cannot run on Windows — 6 of 21 fail | `test_csession.py` |
+| D10 | S3 | Stop hook reports a bogus failure for a successful save | `.claude/hooks/auto_save.py:86` |
+| D11 | S1 | Stop hook never fires on Windows — `python3` is a stub | `.claude/settings.json:9` |
+
+D10 and D11 live in files that commit `95a5b80` had dropped entirely (see D8); they surfaced only
+once the canonical layout was restored.
 
 ---
 
@@ -272,6 +277,60 @@ would have failed from day one, which is consistent with D8 — the workflow was
 
 ---
 
+## D10 — Stop hook reports a bogus failure for a successful save (S3)
+
+**Symptom.** On a Claude Code Stop event the hook emits a thread traceback and an error, even though
+the snapshot was written correctly:
+
+```
+Exception in thread Thread-1 (_readerthread):
+  UnicodeDecodeError: 'charmap' codec can't decode byte 0x8f in position 137
+[csession] ⚠️  Unexpected error: 'NoneType' object has no attribute 'strip'
+```
+
+**Reproduce.** `echo '{}' | python .claude/hooks/auto_save.py` in an initialized project on Windows.
+
+**Root cause.** `auto_save.py:86` calls `subprocess.run(..., text=True)` without an `encoding`. The
+child (`csession save`) emits UTF-8; the parent decodes with the locale codec — cp1252 — so the
+reader thread dies, `result.stdout` comes back `None`, and `.strip()` raises. The mirror image of D2:
+D2 was the child misconfigured, this is the parent.
+
+**Impact.** The save genuinely succeeds, so this is a lying error message rather than data loss — but
+it trains users to distrust a working autosave, which is the feature's whole value.
+
+**Fix.** Pin `encoding="utf-8", errors="replace"` on the call and guard `stdout`/`stderr` against
+`None`. Also reconfigure the hook's own stderr to UTF-8, so its status line renders as `✅` rather
+than `✅` under `backslashreplace`.
+
+---
+
+## D11 — Stop hook never fires on Windows (S1)
+
+**Symptom.** The autosave hook silently does nothing on Windows.
+
+**Root cause.** `.claude/settings.json:9` invokes `python3`. On Windows that name resolves to the
+Microsoft Store alias stub at `%LOCALAPPDATA%\Microsoft\WindowsApps\python3.exe`, which runs nothing:
+
+```
+$ python3 --version
+Python was not found; run without arguments to install from the Microsoft Store...
+$ echo $?
+49
+```
+
+A real interpreter is present as `python`. The stub shadows it for the `python3` name regardless.
+
+**Impact.** Phase 3 — billed in the README as the feature that makes saving "completely automatic" —
+is inert on Windows. It fails silently, so the first symptom is an empty `history/` after a session
+the user believed was captured.
+
+**Fix.** `python3 … || python …`. The stub exits **49**, not 0, so the fallback triggers reliably; and
+`auto_save.py` ends in an unconditional `sys.exit(0)`, so a non-zero status can only mean the
+interpreter never launched — never that the save itself failed. Applied to `settings.json`, the
+setup snippet in the hook's own docstring, and the README.
+
+---
+
 ## Observation — four hardening tests exist in no commit
 
 `.pytest_cache/v/cache/nodeids` records **25** test IDs. Every committed and zipped copy of the suite
@@ -302,7 +361,9 @@ Ordered by severity, each landing with the regression test named above.
 | 6 | D6 — UTF-8 stdout reconfiguration | `test_unicode_output_does_not_crash` | ✅ done |
 | 7 | D7 — correct build backend | backend import check | ✅ done |
 | 8 | D9 — `encoding="utf-8"` at all `read_text()` sites | existing suite green on Windows | ✅ done |
-| 9 | D8 — restore `tests/`, `.github/workflows/`, `install.sh`, `.claude/` | CI green | ⬜ not started |
+| 9 | D8 — restore `tests/`, `.github/workflows/`, `install.sh`, `.claude/` | CI green | ✅ done |
+| 10 | D10 — pin UTF-8 decode in the hook's subprocess call | manual Stop-event run | ✅ done |
+| 11 | D11 — `python3 … || python …` interpreter fallback | manual Stop-event run | ✅ done |
 
 Constraint carried from `README.md`: keep `csession.py` single-file and stdlib-only. Honoured — the
 fixes add no imports beyond the stdlib modules already in use.
@@ -328,5 +389,18 @@ that passes on broken code proves nothing. The D6 test runs `csession status` as
 `PYTHONIOENCODING=cp1252`; an in-process check cannot reproduce the defect because pytest's `capsys`
 replaces stdout with a UTF-8 capture object.
 
-**Not yet addressed:** D8 (repo layout) is deliberately left open — it moves files rather than
-changing behaviour, and is best done as its own commit.
+D10 and D11 are verified by running the hook directly against a Stop-event payload rather than by
+unit test: both are integration failures in how the hook is *launched* and how it *decodes a child
+process*, neither of which an in-process test can exercise honestly.
+
+**All 11 defects are now fixed.** Landed across three commits: the CLI fixes, the layout restore, and
+the hook fixes that the restore made visible.
+
+### Residual notes (not defects, not addressed)
+
+- `csession-repo.zip` is still committed at the project root. Now that the layout it encoded has been
+  restored, it is redundant and will drift. Worth deleting in a future commit.
+- `install.sh` is bash-only, so on Windows the documented one-line install works only under Git Bash
+  or WSL. The manual install path in the README covers it; a `.ps1` equivalent would not.
+- `pyproject.toml` still carries placeholder metadata — `Your Name`, `you@example.com`, and
+  `github.com/yourusername/csession` in four URLs.

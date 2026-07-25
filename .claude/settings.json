@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/auto_save.py"
+            "command": "python3 .claude/hooks/auto_save.py || python .claude/hooks/auto_save.py"
           }
         ]
       }

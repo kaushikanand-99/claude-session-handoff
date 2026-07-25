@@ -21,8 +21,14 @@ Setup (in your project's .claude/settings.json):
           "hooks": [
             {
               "type": "command",
-              "command": "python3 .claude/hooks/auto_save.py"
+              "command": "python3 .claude/hooks/auto_save.py || python .claude/hooks/auto_save.py"
             }
+
+  The `|| python` fallback is required on Windows, where `python3` is a
+  Microsoft Store alias stub that prints "Python was not found" and exits 49
+  without running anything. This script always exits 0 by design, so a
+  non-zero status means the interpreter never launched — never that the
+  save failed.
           ]
         }
       ]
@@ -41,6 +47,16 @@ from pathlib import Path
 
 
 def main():
+    # ── 0. Make our own stderr able to carry emoji ───────────────────────────
+    #   Without this, a cp1252 console falls back to backslashreplace and the
+    #   status line arrives as "✅  Session #1 saved" instead of "✅".
+    reconfigure = getattr(sys.stderr, "reconfigure", None)
+    if reconfigure is not None:
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
     # ── 1. Read the hook payload Claude Code sends on stdin ──────────────────
     payload = {}
     try:
@@ -87,16 +103,26 @@ def main():
             csession_cmd,
             capture_output=True,
             text=True,
+            # csession emits UTF-8 (emoji, box drawing). Without pinning the
+            # decode here the parent falls back to the locale codec — cp1252 on
+            # Windows — the reader thread dies with UnicodeDecodeError, and
+            # stdout comes back as None. The save itself succeeds, so the hook
+            # would report a bogus failure for a snapshot that was written.
+            encoding="utf-8",
+            errors="replace",
             cwd=str(project_root),
             timeout=30
         )
 
+        stdout = (result.stdout or "").strip()
+        stderr = (result.stderr or "").strip()
+
         if result.returncode == 0:
             # Print to stderr so it shows in Claude Code's output without
             # interfering with the normal stop flow
-            print(f"[csession] ✅  {result.stdout.strip()}", file=sys.stderr)
+            print(f"[csession] ✅  {stdout}", file=sys.stderr)
         else:
-            print(f"[csession] ⚠️  Save failed: {result.stderr.strip()}", file=sys.stderr)
+            print(f"[csession] ⚠️  Save failed: {stderr}", file=sys.stderr)
 
     except subprocess.TimeoutExpired:
         print("[csession] ⚠️  Save timed out (>30s)", file=sys.stderr)

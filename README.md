@@ -330,7 +330,7 @@ If you already have a settings file, merge in the Stop hook:
         "hooks": [
           {
             "type": "command",
-            "command": "python3 .claude/hooks/auto_save.py"
+            "command": "python3 .claude/hooks/auto_save.py || python .claude/hooks/auto_save.py"
           }
         ]
       }
