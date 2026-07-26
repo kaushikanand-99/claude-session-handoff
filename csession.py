@@ -23,7 +23,6 @@ Usage:
 
 import argparse
 import json
-import os
 import re
 import subprocess
 import sys
@@ -45,8 +44,8 @@ def _force_utf8_output():
             continue
         try:
             reconfigure(encoding="utf-8", errors="replace")
-        except Exception:
-            pass                          # Redirected/closed stream — leave it alone
+        except Exception:  # noqa: BLE001, S110 — a stream we cannot reconfigure
+            pass           # (piped, closed, replaced) must never abort the CLI
 
 
 _force_utf8_output()
@@ -79,18 +78,22 @@ def run(cmd, fallback: str = "") -> str:
     if isinstance(cmd, str):
         cmd = cmd.split()
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        # check=False is explicit: a non-zero git exit is an expected outcome
+        # here (no commits yet, not a repo), handled by returning the fallback.
+        r = subprocess.run(  # noqa: S603 — argv is hardcoded git commands, never user input
+            cmd, capture_output=True, text=True, timeout=10, check=False
+        )
         if r.returncode != 0:
             return fallback
         return r.stdout.strip() or fallback
-    except Exception:
+    except Exception:  # noqa: BLE001 — git missing or hung; degrade, never crash
         return fallback
 
 
 def read_file(path) -> str:
     try:
         return Path(path).read_text(encoding="utf-8")
-    except Exception:
+    except Exception:  # noqa: BLE001 — a missing/unreadable file reads as empty
         return ""
 
 
@@ -369,8 +372,8 @@ def cmd_save(args):
     _write_resume_prompt(config, git, note, progress, decisions, tasks, now)
 
     print(f"\n✅  Session #{config['session_count']} saved.")
-    print(f"📸  Snapshot  →  .claude-session/SNAPSHOT.md")
-    print(f"📋  Resume    →  .claude-session/RESUME_PROMPT.md")
+    print("📸  Snapshot  →  .claude-session/SNAPSHOT.md")
+    print("📋  Resume    →  .claude-session/RESUME_PROMPT.md")
     print(f"🗄️   Archived  →  .claude-session/history/{archive_name}\n")
 
 
@@ -509,16 +512,16 @@ def cmd_status(args):
     filled  = int(bar_len * pct / 100)
     bar     = "█" * filled + "░" * (bar_len - filled)
 
-    print(f"\n┌─────────────────────────────────────────────────┐")
+    print("\n┌─────────────────────────────────────────────────┐")
     print(f"│  📦  {project:<43}│")
     print(f"│  🔢  Sessions logged: {sessions:<26}│")
     print(f"│  🕐  Last saved:      {last_saved:<26}│")
-    print(f"├─────────────────────────────────────────────────┤")
+    print("├─────────────────────────────────────────────────┤")
     print(f"│  Progress  [{bar}] {pct:>3}%  │")
-    print(f"│                                                 │")
+    print("│                                                 │")
     print(f"│  ✅  Done:         {tasks['done']:<3}  ❌  Blocked:   {tasks['blocked']:<3}      │")
     print(f"│  🔄  In Progress:  {tasks['wip']:<3}  ⬜  Todo:      {tasks['todo']:<3}      │")
-    print(f"└─────────────────────────────────────────────────┘\n")
+    print("└─────────────────────────────────────────────────┘\n")
 
     if tasks["blocked"] > 0:
         print("⚠️   You have blocked tasks — check PROGRESS.md")
@@ -633,8 +636,8 @@ def cmd_log(args):
 
     current = read_file(DECISIONS_FILE)
     write_file(DECISIONS_FILE, current + entry)
-    print(f"✅  Decision logged to .claude-session/DECISIONS.md")
-    print(f"    Edit the file to add 'Reason' and 'Alternatives considered'.")
+    print("✅  Decision logged to .claude-session/DECISIONS.md")
+    print("    Edit the file to add 'Reason' and 'Alternatives considered'.")
 
 
 # ─────────────────────────────────────────────

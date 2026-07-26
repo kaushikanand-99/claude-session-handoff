@@ -7,7 +7,6 @@ import json
 import os
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -185,8 +184,8 @@ class TestTask:
         csession.cmd_task(DoneArgs())
 
         progress = (initialized_project / ".claude-session" / "PROGRESS.md").read_text(encoding="utf-8")
-        lines = [l for l in progress.split("\n") if "T04" in l]
-        assert any("✅" in l for l in lines)
+        lines = [line for line in progress.split("\n") if "T04" in line]
+        assert any("✅" in line for line in lines)
 
     def test_mark_task_wip(self, initialized_project):
         class AddArgs:
@@ -200,8 +199,8 @@ class TestTask:
         csession.cmd_task(WipArgs())
 
         progress = (initialized_project / ".claude-session" / "PROGRESS.md").read_text(encoding="utf-8")
-        lines = [l for l in progress.split("\n") if "T04" in l]
-        assert any("🔄" in l for l in lines)
+        lines = [line for line in progress.split("\n") if "T04" in line]
+        assert any("🔄" in line for line in lines)
 
     def test_unknown_task_id_doesnt_crash(self, initialized_project, capsys):
         class Args:
@@ -307,7 +306,7 @@ class TestRegressions:
 
         progress = (initialized_project / ".claude-session" / "PROGRESS.md").read_text(encoding="utf-8")
         table = progress[progress.index("| ID"):progress.index("## Blockers")].rstrip()
-        assert "" not in [l.strip() for l in table.split("\n")], \
+        assert "" not in [line.strip() for line in table.split("\n")], \
             "a blank line inside the table terminates it in markdown"
 
     def test_unicode_output_does_not_crash(self, initialized_project):
@@ -324,6 +323,7 @@ class TestRegressions:
             cwd=str(initialized_project),
             capture_output=True,
             text=True,
+            check=False,           # a crash is the thing under test; assert on it below
             encoding="utf-8",      # decode the child's UTF-8 in the parent;
             errors="replace",      # without this the parent falls back to cp1252
             env=env,

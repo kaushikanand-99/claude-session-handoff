@@ -54,3 +54,31 @@ py-modules = ["csession"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts   = "-v --tb=short"
+
+[tool.ruff]
+target-version = "py38"
+
+[tool.ruff.lint]
+# Pinned explicitly. With no config, ruff lints against whatever its current
+# defaults happen to be, so a new ruff release can turn CI red without a single
+# line of this project changing. Selecting the set makes the result reproducible.
+select = [
+    "E4", "E7", "E9",  # pycodestyle: the subset ruff enables by default
+    "F",               # pyflakes: real errors — undefined names, dead imports
+    "B",               # bugbear: likely bugs
+    "DTZ",             # timezone-naive datetimes
+    "BLE",             # blind excepts
+    "S",               # bandit security checks
+    "PLW",             # pylint warnings
+]
+ignore = [
+    # csession timestamps are deliberately local wall-clock time. They label a
+    # developer's own session log ("saved at 14:30") and are read back by a
+    # human on the same machine, so UTC would be actively less useful here.
+    "DTZ005",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests shell out to the CLI and assert on its behaviour; subprocess and
+# assert usage is the point, not a smell.
+"tests/*" = ["S101", "S603", "S607"]

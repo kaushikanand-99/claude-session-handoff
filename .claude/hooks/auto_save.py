@@ -39,7 +39,6 @@ Docs: https://docs.anthropic.com/en/docs/claude-code/hooks
 """
 
 import json
-import os
 import subprocess
 import sys
 from datetime import datetime
@@ -54,7 +53,7 @@ def main():
     if reconfigure is not None:
         try:
             reconfigure(encoding="utf-8", errors="replace")
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 — never let this abort the hook
             pass
 
     # ── 1. Read the hook payload Claude Code sends on stdin ──────────────────
@@ -63,8 +62,9 @@ def main():
         raw = sys.stdin.read()
         if raw.strip():
             payload = json.loads(raw)
-    except (json.JSONDecodeError, Exception):
-        pass  # Payload is optional; we continue regardless
+    except Exception:  # noqa: BLE001, S110 — payload is optional; continue regardless
+        pass           # (was `except (JSONDecodeError, Exception)`, where the
+                       #  second arm already subsumed the first)
 
     # ── 2. Only act if .claude-session/ workspace exists ─────────────────────
     workspace = Path(".claude-session")
@@ -75,8 +75,7 @@ def main():
     # ── 3. Build an auto-save message from the hook context ──────────────────
     #   The Stop hook payload can include a "reason" or other metadata.
     #   We use it to make the snapshot note descriptive.
-    reason   = payload.get("reason", "")
-    hook_active = payload.get("stop_hook_active", False)
+    reason    = payload.get("reason", "")
     timestamp = datetime.now().strftime("%H:%M")
 
     if reason:
@@ -99,10 +98,11 @@ def main():
 
     # ── 5. Run csession save ──────────────────────────────────────────────────
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603 — argv is built here, not user input
             csession_cmd,
             capture_output=True,
             text=True,
+            check=False,          # non-zero is handled below, not raised
             # csession emits UTF-8 (emoji, box drawing). Without pinning the
             # decode here the parent falls back to the locale codec — cp1252 on
             # Windows — the reader thread dies with UnicodeDecodeError, and
@@ -128,7 +128,7 @@ def main():
         print("[csession] ⚠️  Save timed out (>30s)", file=sys.stderr)
     except FileNotFoundError:
         print("[csession] ⚠️  csession.py not found. Check installation.", file=sys.stderr)
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 — the hook must never break Claude's stop
         print(f"[csession] ⚠️  Unexpected error: {e}", file=sys.stderr)
 
     # ── 6. Exit 0 = let Claude stop normally ─────────────────────────────────

@@ -63,4 +63,8 @@ jobs:
       - name: Install ruff
         run: pip install ruff
       - name: Lint
-        run: ruff check csession.py
+        # Lints the whole project, not just csession.py — the hook and the test
+        # suite are shipped code too, and checking one file let real dead code
+        # sit in .claude/hooks/auto_save.py unnoticed. Rules are pinned in
+        # pyproject.toml so this result does not drift with new ruff releases.
+        run: ruff check .
