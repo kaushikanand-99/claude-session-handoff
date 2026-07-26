@@ -10,7 +10,7 @@ readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.8"
 authors = [
-    { name = "Your Name", email = "you@example.com" }
+    { name = "Kaushik Anand", email = "kaushik.anand.tech@gmail.com" }
 ]
 keywords = ["claude", "ai", "session", "context", "developer-tools", "cli"]
 classifiers = [
@@ -43,10 +43,10 @@ dev = [
 csession = "csession:main"
 
 [project.urls]
-Homepage   = "https://github.com/yourusername/csession"
-Repository = "https://github.com/yourusername/csession"
-Issues     = "https://github.com/yourusername/csession/issues"
-Changelog  = "https://github.com/yourusername/csession/blob/main/CHANGELOG.md"
+Homepage   = "https://github.com/kaushikanand-99/Claude-Session-Management-System"
+Repository = "https://github.com/kaushikanand-99/Claude-Session-Management-System"
+Issues     = "https://github.com/kaushikanand-99/Claude-Session-Management-System/issues"
+Changelog  = "https://github.com/kaushikanand-99/Claude-Session-Management-System/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
 py-modules = ["csession"]

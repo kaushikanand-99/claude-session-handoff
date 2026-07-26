@@ -367,8 +367,8 @@ csession log "Chose FastAPI over Flask for async support and Pydantic validation
 Contributions are welcome! Here's how to get started:
 
 ```bash
-git clone https://github.com/yourusername/csession.git
-cd csession
+git clone https://github.com/kaushikanand-99/Claude-Session-Management-System.git
+cd Claude-Session-Management-System
 python3 csession.py --help   # verify it works
 ```
 
@@ -406,6 +406,6 @@ MIT — see [LICENSE](LICENSE) for details.
 
 Built for developers who want their AI to pick up where it left off.
 
-**[⭐ Star this repo](https://github.com/yourusername/csession)** if `csession` saves you time.
+**[⭐ Star this repo](https://github.com/kaushikanand-99/Claude-Session-Management-System)** if `csession` saves you time.
 
 </div>

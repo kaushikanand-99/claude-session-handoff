@@ -35,5 +35,5 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-[Unreleased]: https://github.com/yourusername/csession/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/yourusername/csession/releases/tag/v1.0.0
+[Unreleased]: https://github.com/kaushikanand-99/Claude-Session-Management-System/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/kaushikanand-99/Claude-Session-Management-System/releases/tag/v1.0.0
