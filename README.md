@@ -13,6 +13,9 @@
 
 *Your AI coding assistant — but it never forgets.*
 
+Capture Claude Code session state into structured handoff documents, so a new
+session can resume work with full context instead of starting cold.
+
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue?style=flat-square&logo=python)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey?style=flat-square)]()
@@ -367,8 +370,8 @@ csession log "Chose FastAPI over Flask for async support and Pydantic validation
 Contributions are welcome! Here's how to get started:
 
 ```bash
-git clone https://github.com/kaushikanand-99/Claude-Session-Management-System.git
-cd Claude-Session-Management-System
+git clone https://github.com/kaushikanand-99/claude-session-handoff.git
+cd claude-session-handoff
 python3 csession.py --help   # verify it works
 ```
 
@@ -406,6 +409,6 @@ MIT — see [LICENSE](LICENSE) for details.
 
 Built for developers who want their AI to pick up where it left off.
 
-**[⭐ Star this repo](https://github.com/kaushikanand-99/Claude-Session-Management-System)** if `csession` saves you time.
+**[⭐ Star this repo](https://github.com/kaushikanand-99/claude-session-handoff)** if `csession` saves you time.
 
 </div>

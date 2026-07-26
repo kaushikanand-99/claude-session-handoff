@@ -17,8 +17,8 @@ Thanks for your interest in contributing! `csession` is a small, focused tool �
 ## Getting Started
 
 ```bash
-git clone https://github.com/kaushikanand-99/Claude-Session-Management-System.git
-cd Claude-Session-Management-System
+git clone https://github.com/kaushikanand-99/claude-session-handoff.git
+cd claude-session-handoff
 
 # Verify it works
 python3 csession.py --help
@@ -33,7 +33,7 @@ python3 -m pytest tests/ -v
 
 ### Reporting a Bug
 
-1. Search [existing issues](https://github.com/kaushikanand-99/Claude-Session-Management-System/issues) first.
+1. Search [existing issues](https://github.com/kaushikanand-99/claude-session-handoff/issues) first.
 2. Open a new issue using the **Bug Report** template.
 3. Include: Python version, OS, command you ran, expected vs actual output.
 
@@ -91,4 +91,4 @@ python3 -m pytest tests/ -v
 
 ## Questions?
 
-Open a [Discussion](https://github.com/kaushikanand-99/Claude-Session-Management-System/discussions) — happy to help.
+Open a [Discussion](https://github.com/kaushikanand-99/claude-session-handoff/discussions) — happy to help.

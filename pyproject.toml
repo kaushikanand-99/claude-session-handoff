@@ -43,10 +43,10 @@ dev = [
 csession = "csession:main"
 
 [project.urls]
-Homepage   = "https://github.com/kaushikanand-99/Claude-Session-Management-System"
-Repository = "https://github.com/kaushikanand-99/Claude-Session-Management-System"
-Issues     = "https://github.com/kaushikanand-99/Claude-Session-Management-System/issues"
-Changelog  = "https://github.com/kaushikanand-99/Claude-Session-Management-System/blob/main/CHANGELOG.md"
+Homepage   = "https://github.com/kaushikanand-99/claude-session-handoff"
+Repository = "https://github.com/kaushikanand-99/claude-session-handoff"
+Issues     = "https://github.com/kaushikanand-99/claude-session-handoff/issues"
+Changelog  = "https://github.com/kaushikanand-99/claude-session-handoff/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
 py-modules = ["csession"]
